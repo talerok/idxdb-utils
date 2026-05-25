@@ -1,7 +1,17 @@
 import { ObjectStore } from "../store/index.js";
 
 export class Transaction implements AsyncDisposable {
-	constructor(public readonly raw: IDBTransaction) {}
+	readonly raw: IDBTransaction;
+	readonly done: Promise<void>;
+
+	constructor(raw: IDBTransaction) {
+		this.raw = raw;
+		this.done = new Promise<void>((resolve, reject) => {
+			raw.addEventListener("complete", () => resolve());
+			raw.addEventListener("error", (e) => reject(errorOf(raw, e)));
+			raw.addEventListener("abort", (e) => reject(errorOf(raw, e)));
+		});
+	}
 
 	async [Symbol.asyncDispose](): Promise<void> {
 		await this.done;
@@ -26,12 +36,6 @@ export class Transaction implements AsyncDisposable {
 	get objectStoreNames(): DOMStringList {
 		return this.raw.objectStoreNames;
 	}
-
-	readonly done = new Promise<void>((resolve, reject) => {
-		this.raw.addEventListener("complete", () => resolve());
-		this.raw.addEventListener("error", (e) => reject(errorOf(this.raw, e)));
-		this.raw.addEventListener("abort", (e) => reject(errorOf(this.raw, e)));
-	});
 
 	objectStore<T = unknown>(name: string): ObjectStore<T> {
 		return new ObjectStore<T>(this.raw.objectStore(name));
